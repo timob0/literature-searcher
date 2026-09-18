@@ -1,0 +1,9 @@
+# One Zotero collection name per line.
+# Matching collections and all of their subcollections are indexed.
+# Example:
+# Literature Review
+# Methods
+Thesis
+Thesis Lit Review Screening - Pass German
+Thesis Lit Review Screening - Pass English
+
