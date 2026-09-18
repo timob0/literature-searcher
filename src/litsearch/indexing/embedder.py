@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+import torch
 from sentence_transformers import SentenceTransformer
 
 from litsearch.config import settings
@@ -20,6 +21,10 @@ class SentenceTransformerEmbeddingProvider:
         self.model_name = model_name or settings.embedding_model
         self.device = device or settings.embedding_device
         self.normalize = settings.embedding_normalize if normalize is None else normalize
+        # OMP_NUM_THREADS alone isn't reliably honored by torch's CPU thread pool (backend/build
+        # dependent); setting it explicitly is the only mechanism guaranteed to take effect.
+        if settings.torch_num_threads:
+            torch.set_num_threads(settings.torch_num_threads)
         self.model = SentenceTransformer(self.model_name, device=self.device)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
