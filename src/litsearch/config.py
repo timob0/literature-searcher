@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from pydantic import Field
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     embedding_device: str = Field(default="cpu")
     embedding_batch_size: int = Field(default=32)
     embedding_normalize: bool = Field(default=True)
+    torch_num_threads: int | None = Field(default=None)
     chunk_target_tokens: int = Field(default=500)
     chunk_min_tokens: int = Field(default=200)
     chunk_max_tokens: int = Field(default=800)
@@ -104,3 +106,9 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Must happen before torch is imported anywhere (config is the first project import in every
+# entry point), otherwise torch's native thread pools are already sized and this has no effect.
+if settings.torch_num_threads:
+    os.environ.setdefault("OMP_NUM_THREADS", str(settings.torch_num_threads))
+    os.environ.setdefault("MKL_NUM_THREADS", str(settings.torch_num_threads))
