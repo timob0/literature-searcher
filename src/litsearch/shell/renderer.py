@@ -111,6 +111,68 @@ class ShellRenderer:
                 self.console.print(text, end="")
                 self.console.print(f'"{page}')
 
+    def render_similar_documents(self, search: object, *, debug: bool = False) -> None:
+        source_title = escape(getattr(search, "source_title", None) or "Unknown paper")
+        source_key = escape(getattr(search, "source_citation_key", None) or "unknown")
+        self.console.print(f"[bold]Papers semantically similar to {source_title}[/bold]")
+        self.console.print(f"Source citation: {source_key}")
+        if debug:
+            self.console.print("Similarity search diagnostics:")
+            self.console.print(f"    Usable source chunks: {search.usable_source_chunks}")
+            self.console.print(
+                f"    Representative chunks selected: {search.representative_source_chunks}"
+            )
+            self.console.print(f"    Queries executed: {search.queries_executed}")
+            self.console.print(f"    Candidate chunk hits: {search.candidate_chunk_hits}")
+            self.console.print(f"    Candidate publications: {search.candidate_publications}")
+            self.console.print(
+                f"    Candidates passing coverage threshold: {search.candidates_passing_threshold}"
+            )
+        results = list(getattr(search, "results", []) or [])
+        if not results:
+            self.console.print("No semantically similar publications were found.")
+            return
+        for index, result in enumerate(results, start=1):
+            self.console.print(f"\n[cyan][{index}][/cyan] {escape(result.title or 'Unknown paper')}")
+            self.console.print(f"    Citation: {escape(result.citation_key)}")
+            self.console.print(f"    Similarity: {result.similarity_score:.2f}")
+            if debug:
+                self.console.print(f"    Semantic strength: {result.semantic_strength:.2f}")
+            self.console.print(
+                f"    Source coverage: {result.covered_source_chunks}/"
+                f"{result.total_source_chunks} ({result.coverage_ratio:.0%})"
+            )
+            if result.overlaps:
+                self.console.print("    Strongest overlap:")
+                for overlap in result.overlaps:
+                    source_page = self._pdf_page_range(
+                        overlap.source_page_start, overlap.source_page_end
+                    )
+                    candidate_page = self._pdf_page_range(
+                        overlap.candidate_page_start, overlap.candidate_page_end
+                    )
+                    if debug:
+                        self.console.print(
+                            f"      S{overlap.source_chunk_index:02d} -> "
+                            f"C{overlap.candidate_chunk_index:02d}: {overlap.similarity:.2f}"
+                        )
+                    source_location = f" ({source_page})" if source_page else ""
+                    candidate_location = f" ({candidate_page})" if candidate_page else ""
+                    self.console.print(
+                        f'      • Source{source_location}: "{escape(overlap.source_excerpt)}"'
+                    )
+                    self.console.print(
+                        f'        Match{candidate_location}: "{escape(overlap.candidate_excerpt)}"'
+                    )
+
+    @staticmethod
+    def _pdf_page_range(start: int | None, end: int | None) -> str | None:
+        if start is None:
+            return None
+        if end is None or end == start:
+            return f"PDF p. {start}"
+        return f"PDF pp. {start}–{end}"
+
     def render_summary(self, result: object) -> None:
         summary = getattr(result, "summary", None) or result
         title = getattr(result, "title", None) or getattr(summary, "title", None) or "Unknown document"

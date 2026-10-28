@@ -28,6 +28,20 @@ class ChromaVectorStore:
             kwargs["where"] = where
         return self.collection.query(**kwargs)
 
+    def get_by_citation_key(self, citation_key: str) -> dict[str, Any]:
+        return self.collection.get(
+            where={"citation_key": citation_key},
+            include=["documents", "metadatas", "embeddings"],
+        )
+
+    def similarity_from_distance(self, distance: float) -> float:
+        space = (self.collection.metadata or {}).get("hnsw:space", "l2")
+        if space in {"cosine", "ip"}:
+            return 1.0 - distance
+        if space == "l2":
+            return 1.0 - distance / 2.0
+        raise ValueError(f"Unsupported Chroma distance space: {space}")
+
     def count(self) -> int:
         return self.collection.count()
 

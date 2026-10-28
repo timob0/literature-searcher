@@ -13,6 +13,7 @@ from litsearch.shell.state import DocumentSearchHit
 from litsearch.shell.opener import open_pdf
 from litsearch.indexing.manifest import IndexManifest
 from litsearch.retrieval.models import SearchFilters
+from litsearch.retrieval.similarity import CitationKeyNotFoundError, SimilaritySearchStrategy
 
 
 class LiteratureShell(cmd2.Cmd):
@@ -27,6 +28,8 @@ class LiteratureShell(cmd2.Cmd):
         self.source_filter: str | None = None
         self.source_candidates: list[str] = []
         self._last_summary = None
+        self._last_similar_result = None
+        self.similarity = SimilaritySearchStrategy(self.services.retriever.vector_store)
         health = self.services.llm.health_check() if self.services.llm is not None else None
         self.renderer.render_banner(
             embedding_available=self.services.retriever.embedding_provider is not None,
@@ -194,11 +197,14 @@ class LiteratureShell(cmd2.Cmd):
             self.renderer.error(f"Search failed: {exc}")
 
     def do_find(self, arg: str) -> None:
-        """find [--full] <concept>\nGroup semantic Chroma hits by document without LLM analysis."""
+        """find [--full] <concept> | similar [--debug] <citation-key>\nFind passages or similar papers without LLM ranking."""
         try:
             parts = shlex.split(arg)
         except ValueError as exc:
             self.renderer.error(f"Find failed: {exc}")
+            return
+        if parts and parts[0].casefold() == "similar":
+            self.do_find_similar(" ".join(parts[1:]))
             return
         full = "--full" in parts
         author, parts = self._extract_author(parts)
@@ -213,6 +219,58 @@ class LiteratureShell(cmd2.Cmd):
             self.renderer.render_document_hits(f"FIND results for: {concept}", results, full=full, query=concept)
         except Exception as exc:
             self.renderer.error(f"Find failed: {exc}")
+
+    def do_find_similar(self, arg: str) -> None:
+        """find similar [--debug] <citation-key>\nFind semantically similar publications from stored chunk embeddings."""
+        try:
+            parts = shlex.split(arg)
+        except ValueError as exc:
+            self.renderer.error(f"Similar-paper search failed: {exc}")
+            return
+        debug = "--debug" in parts
+        citation_key = self._require_query(" ".join(part for part in parts if part != "--debug"))
+        if citation_key is None:
+            return
+        try:
+            result = self.similarity.search(citation_key)
+            self._last_similar_result = result
+            self._remember_sources([*result.results])
+            if citation_key not in self.source_candidates:
+                self.source_candidates.append(citation_key)
+            if result.usable_source_chunks == 0:
+                self.renderer.console.print(f"No indexed text available for {citation_key}.")
+                return
+            self.renderer.render_similar_documents(result, debug=debug)
+        except CitationKeyNotFoundError as exc:
+            try:
+                known_in_manifest = any(
+                    entry.citation_key == citation_key
+                    for entry in IndexManifest().all_entries()
+                )
+            except Exception as manifest_error:
+                self.renderer.error(f"Could not check the index manifest: {manifest_error}")
+                return
+            if known_in_manifest:
+                self.renderer.console.print(f"No indexed text available for {citation_key}.")
+            else:
+                self.renderer.error(str(exc))
+        except Exception as exc:
+            self.renderer.error(f"Similar-paper search failed: {exc}")
+
+    def complete_find(self, text: str, line: str, begidx: int, endidx: int) -> list[str]:
+        """Complete citation keys for the `find similar` subcommand."""
+        try:
+            parts = shlex.split(line[:begidx])
+        except ValueError:
+            parts = line[:begidx].split()
+        if len(parts) >= 2 and parts[1].casefold() == "similar":
+            prefix = text.casefold()
+            candidates = [
+                key for key in self.source_candidates
+                if key.casefold().startswith(prefix)
+            ]
+            return self.basic_complete(text, line, begidx, endidx, candidates)
+        return []
 
     @staticmethod
     def _group_find_hits(chunks: list[object]) -> list[DocumentSearchHit]:

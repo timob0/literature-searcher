@@ -54,6 +54,12 @@ class FakeRenderer:
     def render_document_hits(self, *args, **kwargs):
         pass
 
+    def render_similar_documents(self, *args, **kwargs):
+        pass
+
+    def error(self, *args, **kwargs):
+        pass
+
     def render_summary(self, *args, **kwargs):
         pass
 
@@ -111,6 +117,32 @@ def test_shell_find_uses_raw_semantic_retrieval() -> None:
 
     assert retriever.calls == [("health literacy", 50)]
     assert definitions.calls == []
+
+
+def test_find_similar_dispatches_to_paper_similarity_search() -> None:
+    services = ShellServices(FakeRetriever(), FakeStrategy(), FakeStrategy(), FakeSummaryStrategy())
+    shell = LiteratureShell(services=services, renderer=FakeRenderer())
+    expected = type(
+        "Search",
+        (),
+        {
+            "results": [type("Result", (), {"citation_key": "candidatePaper"})()],
+            "usable_source_chunks": 1,
+        },
+    )()
+    calls: list[str] = []
+    shell.similarity = type(
+        "Similarity",
+        (),
+        {"search": lambda self, citation_key: calls.append(citation_key) or expected},
+    )()
+
+    shell.onecmd("find similar sourcePaper")
+
+    assert calls == ["sourcePaper"]
+    assert shell._last_similar_result is expected
+    assert "candidatePaper" in shell.source_candidates
+    assert "sourcePaper" in shell.source_candidates
 
 
 def test_shell_author_filter_supports_setting_and_inline_forms() -> None:

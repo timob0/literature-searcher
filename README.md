@@ -97,11 +97,14 @@ litsearch> define health literacy
 litsearch> examples supportive leadership
 litsearch> search employee wellbeing
 litsearch> summarize smithMethodStudy2024
+litsearch> find similar scheinCultureMissingConcept1996
 litsearch> help
 litsearch> exit
 ```
 
 Phase 1 supports `search`, `find`, `define`, `explain`, `examples`, `summarize`, `help`, and `exit` (with `quit` and `q` aliases). `find` returns direct semantic Chroma hits without LLM analysis, grouped by document. By default it shows the highest-scoring matching chunk for each document; use `find --full <concept>` to show all retrieved matching chunks. `define` returns validated definitions, while `explain` also includes validated conceptual discussions. Normal Typer commands remain available, and shell settings are session-local.
+
+`find similar <citation-key>` compares an indexed publication with other publications using its stored BGE-M3 chunk embeddings. It selects a diverse, capped set of source chunks, searches Chroma for candidate passages, and ranks papers using match strength plus source-topic coverage. Results include strongest paired excerpts and physical PDF page ranges. Use `find similar --debug <citation-key>` to see selection and retrieval counts. Similarity does not re-embed documents or use an LLM for ranking.
 
 The shell supports an optional author filter for `find`, `define`, and `explain`:
 
