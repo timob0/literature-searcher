@@ -10,4 +10,4 @@ chroma/
 data/*.sqlite
 data/chroma.pid
 data/chroma.log
-
+data.tgz
